@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
 import { runInTempDir } from "@cloudflare/workers-utils/test-helpers";
 import { describe, it, vi } from "vitest";
+import { usingLocalBucket } from "../../r2/helpers/object";
 import { mockConsoleMethods } from "../helpers/mock-console";
 import { runWrangler } from "../helpers/run-wrangler";
+import type { Config } from "@cloudflare/workers-utils";
 
 // Miniflare's use of undici doesn't play well with jest-mock-fetch
 // and it is not needed here anyway.
@@ -302,6 +304,58 @@ describe("r2", () => {
 					)
 				).rejects.toThrowErrorMatchingInlineSnapshot(
 					`[Error: The specified key does not exist.]`
+				);
+			});
+
+			it("should store --expires as a date in a local bucket", async ({
+				expect,
+			}) => {
+				fs.writeFileSync("payload", "quarterly numbers");
+				fs.writeFileSync(
+					"list.json",
+					JSON.stringify([{ key: "bulk.pdf", file: "payload" }])
+				);
+
+				await runWrangler(
+					`r2 object put bucket-object-test/http-date.pdf --file ./payload --expires "Wed, 21 Oct 2026 07:28:00 GMT"`
+				);
+				await runWrangler(
+					`r2 object put bucket-object-test/iso-date.pdf --file ./payload --expires 2026-10-21`
+				);
+				await runWrangler(
+					`r2 bulk put bucket-object-test --filename ./list.json --expires "Wed, 21 Oct 2026 07:28:00 GMT"`
+				);
+				std.getAndClearOut();
+
+				const cacheExpiry = (key: string) =>
+					usingLocalBucket(
+						undefined,
+						{} as Config,
+						"bucket-object-test",
+						async (bucket) =>
+							(await bucket.head(key))?.httpMetadata?.cacheExpiry?.toISOString()
+					);
+
+				expect(await cacheExpiry("http-date.pdf")).toBe(
+					"2026-10-21T07:28:00.000Z"
+				);
+				expect(await cacheExpiry("iso-date.pdf")).toBe(
+					"2026-10-21T00:00:00.000Z"
+				);
+				expect(await cacheExpiry("bulk.pdf")).toBe("2026-10-21T07:28:00.000Z");
+			});
+
+			it("should reject an --expires value that is not a date", async ({
+				expect,
+			}) => {
+				fs.writeFileSync("payload", "quarterly numbers");
+
+				await expect(() =>
+					runWrangler(
+						`r2 object put bucket-object-test/report.pdf --file ./payload --expires tomorrow`
+					)
+				).rejects.toThrowErrorMatchingInlineSnapshot(
+					`[Error: The --expires value "tomorrow" is not a valid date. Use an HTTP date such as "Wed, 21 Oct 2026 07:28:00 GMT" or an ISO 8601 date.]`
 				);
 			});
 

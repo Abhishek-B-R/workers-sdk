@@ -232,3 +232,32 @@ export function validateAndReturnBucketAndKey(objectPath: string): {
 
 	return { bucket, key };
 }
+
+/**
+ * Convert the `--expires` argument into the millisecond timestamp the local
+ * R2 binding accepts for `httpMetadata.cacheExpiry`.
+ *
+ * Remote uploads send `--expires` verbatim as the `Expires` header, so it is
+ * usually an HTTP date. An all-digit value is treated as epoch milliseconds,
+ * which is what local mode has always accepted.
+ *
+ * @param expires The value passed to `--expires`
+ * @returns The expiry as epoch milliseconds, or `undefined` when not set
+ */
+export function parseExpiresForLocalBucket(
+	expires: string | undefined
+): number | undefined {
+	if (expires === undefined) {
+		return undefined;
+	}
+	const timestamp = /^\d+$/.test(expires)
+		? Number(expires)
+		: Date.parse(expires);
+	if (Number.isNaN(timestamp)) {
+		throw new UserError(
+			`The --expires value "${expires}" is not a valid date. Use an HTTP date such as "Wed, 21 Oct 2026 07:28:00 GMT" or an ISO 8601 date.`,
+			{ telemetryMessage: "r2 object put invalid expires" }
+		);
+	}
+	return timestamp;
+}

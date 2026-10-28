@@ -21,6 +21,7 @@ import { isDataCatalogConflict } from "./helpers/misc";
 import {
 	deleteR2Object,
 	getR2Object,
+	parseExpiresForLocalBucket,
 	putRemoteObject,
 	usingLocalBucket,
 	validateAndReturnBucketAndKey,
@@ -364,10 +365,7 @@ export const r2ObjectPutCommand = createCommand({
 							// @ts-expect-error `@cloudflare/workers-types` is wrong
 							//  here, `number`'s are allowed for `Date`s
 							// TODO(now): fix
-							cacheExpiry:
-								yArgs.expires === undefined
-									? undefined
-									: parseInt(yArgs.expires),
+							cacheExpiry: parseExpiresForLocalBucket(yArgs.expires),
 						},
 					};
 					// We can't use `r2Bucket.put()` here as `R2Bucket#put()`
@@ -641,10 +639,7 @@ export const r2BulkPutCommand = createCommand({
 							// @ts-expect-error `@cloudflare/workers-types` is wrong
 							//  here, `number`'s are allowed for `Date`s
 							// TODO(now): fix
-							cacheExpiry:
-								yArgs.expires === undefined
-									? undefined
-									: parseInt(yArgs.expires),
+							cacheExpiry: parseExpiresForLocalBucket(yArgs.expires),
 						},
 					};
 
